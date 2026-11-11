@@ -1,8 +1,6 @@
 # academic-pdf-zh
 
-将英文学术论文 PDF 译成尽量保留原版面的中文 PDF 的技能说明（skill）。默认交付纯中文文件，文件名使用 `原标题-zh.pdf`。
-
-This repository is a reusable skill/playbook for turning English academic PDFs into layout-preserving Chinese PDFs. It is not a hosted translation service.
+把英文学术 PDF 译成尽量保留原版面的中文 PDF 的 skill。
 
 ## 里面有什么
 

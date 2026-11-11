@@ -15,6 +15,8 @@ This skill must never contain secrets, tokens, accounts, key-file paths, or any 
 - Always deliver an openable PDF attachment; never paste the translation into the chat.
 - Name files `original-title-zh.pdf`, not `-中文` or `-zh-CN`.
 - Report the result concisely in Chinese; handle only the one paper the user handed over, never go looking for new papers.
+- Keep figures, algorithm boxes and code listings in their original English by default (see "Figures and algorithm boxes"); translate only captions and body text.
+- For long jobs, say up front roughly how long it will take, then post one line when each stage (translation, patching, checks) finishes, so the user does not have to keep asking for progress.
 - Translate locally. Do not upload the paper to unknown third-party sites.
 
 ## Toolchain (how it is actually done)
@@ -48,6 +50,12 @@ babeldoc --openai \
   "$INPUT_PDF"
 ```
 
+**Self-test the endpoint before the real run:** send a small piece of text to the same endpoint and model with `curl` or a short script, and confirm a non-empty translation comes back. Common traps:
+
+- Some services require a `User-Agent` or an extra session header; without it they return 403/400 while the tool silently retries, which looks like a hang.
+- A reasoning model with thinking enabled may put the translation in `reasoning_content` and leave `content` empty; disable thinking (e.g. `--openai-thinking disabled` or the service's own switch).
+- Set timeouts for the whole job and for each request (e.g. 120 s per request). If the output directory stays empty and the log shows no progress, check the endpoint instead of waiting.
+
 Pass the key via an environment variable (e.g. `OPENAI_API_KEY`), not `--openai-api-key`. Drop `--no-dual` if the user wants a bilingual version. Keep the unedited draft the tool produced, so patching can restart from it if something goes wrong.
 
 ### 3. Post-translation patching (PyMuPDF)
@@ -59,6 +67,26 @@ Fix typos, placeholders, layout breakage and mistranslations against the origina
 - When inserting Chinese, confirm the font contains the glyph; some Chinese fonts lack certain math symbols (e.g. U+2217 ∗) — switch to a font that has them rather than leaving tofu boxes.
 - Subset fonts only once, after all edits are done (`subset_fonts()`, deflate / garbage collect on save). Do not insert new glyphs afterwards into the same already-subset font name.
 
+### 3.5 Figures and algorithm boxes: restore the English original
+
+BabelDOC also translates text inside figures, algorithm boxes (Algorithm N) and code listings, and the result is often garbled. Default handling:
+
+- Use `get_image_rects`, clustering of `get_drawings`, and the position of the `Fig. N` caption to find the bounding box of each figure, algorithm box and code listing on the English original page. The box must cover all text and lines inside the figure but not the caption or body lines.
+- On the translated page, cover the same region with a white rectangle first, then paste the English region back with the method above (`sanitize_clip` + `show_pdf_page`).
+- Captions, table titles and in-text references outside the box stay in Chinese; the title, Input/Output and every step inside an algorithm box stay in English.
+- In two-column papers cover only the column the item sits in; treat a figure spanning both columns as one piece.
+
+### 3.6 Must-fix list and terminology consistency
+
+After translation, always check and fix these places where BabelDOC regularly fails, instead of waiting for the spot check to find them:
+
+- References translated or squeezed together: paste back from the English original.
+- Function names, field names and identifiers in tables translated or garbled: paste back or restore the original.
+- Lost indentation or monospace font in code listings: paste back from the original.
+- Overlapping appendix or section headings; a damaged first-page author block, email addresses or footer.
+- Broken table, figure or section references (e.g. "如 IV 所示" should be "如表 IV 所示").
+- Inconsistent terms: before translating, fix a glossary of key terms (e.g. keep "gadget" in English or use one fixed rendering); after translating, search the whole text with `pdftotext` for each term's variants and leftover English, and unify them before delivery.
+
 ### 4. Spot checks before delivery
 
 Check the page count with `pdfinfo`, look for untranslated passages, leftover long English sentences, tool placeholders and duplicated phrases with `pdftotext -layout`, and render pages with `pdftoppm` for a visual comparison. At minimum check:
@@ -68,6 +96,8 @@ Check the page count with `pdfinfo`, look for untranslated passages, leftover lo
 - Any large overlaps, overflows, garbled glyphs or missing translations
 - Are indentation and monospace fonts preserved in code or lists
 - Were references mistranslated or squeezed together
+- Are all figures and algorithm boxes restored to the English original, without covering captions or body text
+- Is terminology consistent throughout
 - Obvious errors in the author block, footers, table headers, appendices
 
 Fix problems before delivering; if something cannot be fixed, say so plainly.
@@ -78,8 +108,8 @@ Fix problems before delivering; if something cannot be fixed, say so plainly.
 - Keep proper nouns, abbreviations, formulas, code and citation markers in the original language.
 - Keep reference entries (authors, titles, venues, years, links and other bibliographic data) in the original language; the section heading itself may become 「参考文献」.
 - Translate all readable text: abstract, body, figure and table captions, list headings, footnotes, appendices.
-- Do not redraw or replace images, drawings or diagrams. If text baked into a figure cannot be extracted reliably, keep the original figure and say so on delivery.
+- Keep figures, drawings, diagrams and the text inside them as the original English figure; do not redraw or replace them. Algorithm boxes and code listings also stay in English; translate only captions, table titles and in-text references.
 
 ## Delivery
 
-Attach the PDF and, in one or two sentences, state whether it is Chinese-only or bilingual and what deserves attention (e.g. untranslated text inside figures, occasional overflow in tight layouts).
+Attach the PDF and, in one or two sentences, state whether it is Chinese-only or bilingual and what deserves attention (e.g. occasional overflow in tight layouts, columns with tight spacing).

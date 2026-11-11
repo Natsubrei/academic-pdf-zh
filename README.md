@@ -2,9 +2,12 @@
 
 把英文学术 PDF 译成尽量保留原版面的中文 PDF 的 skill。
 
+- Agent instructions: [`SKILL.md`](SKILL.md)（中文）, [`SKILL.en.md`](SKILL.en.md) (English)
+
 ## 里面有什么
 
 - [`SKILL.md`](SKILL.md)：给助手（或自己）照着执行的完整流程，包括默认约定、BabelDOC 调用方式、PyMuPDF 精修，以及交前检查。
+- [`SKILL.en.md`](SKILL.en.md)：同一份流程的英文版。
 - 本仓库**不包含** API 密钥、账号或密钥路径。翻译需要你自己的 OpenAI 兼容接口与密钥，通过环境变量传入工具。
 
 ## 怎么用

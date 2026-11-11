@@ -1,0 +1,27 @@
+# academic-pdf-zh
+
+将英文学术论文 PDF 译成尽量保留原版面的中文 PDF 的技能说明（skill）。默认交付纯中文文件，文件名使用 `原标题-zh.pdf`。
+
+This repository is a reusable skill/playbook for turning English academic PDFs into layout-preserving Chinese PDFs. It is not a hosted translation service.
+
+## 里面有什么
+
+- [`SKILL.md`](SKILL.md)：给助手（或自己）照着执行的完整流程，包括默认约定、BabelDOC 调用方式、PyMuPDF 精修，以及交前检查。
+- 本仓库**不包含** API 密钥、账号或密钥路径。翻译需要你自己的 OpenAI 兼容接口与密钥，通过环境变量传入工具。
+
+## 怎么用
+
+1. 把 `SKILL.md` 交给会执行 skill 的助手，或按其中步骤在本地自行操作。
+2. 准备英文学术 PDF，以及已配置的翻译接口（环境变量如 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL`）。
+3. 按 skill 先做版面保留翻译，再对照原文精修和抽查，最后交付 `原标题-zh.pdf`。
+
+把论文交给助手并要求做成中文版时，即可按这份 skill 执行；不必自己先手动跑一遍工具。
+
+## 默认约定（摘要）
+
+- 默认纯中文；只有明确要求时才出中英对照。
+- 交付可打开的 PDF，而不是把译文贴在聊天里。
+- 在本地翻译，不要把论文上传到来历不明的第三方网站。
+- 参考文献书目信息保持原文；图本身不重绘，图内文字无法可靠提取时保留原图并说明。
+
+更完整的标准与修补方法见 [`SKILL.md`](SKILL.md)。

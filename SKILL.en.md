@@ -87,6 +87,19 @@ After translation, always check and fix these places where BabelDOC regularly fa
 - Broken table, figure or section references (e.g. "如 IV 所示" should be "如表 IV 所示").
 - Inconsistent terms: before translating, fix a glossary of key terms (e.g. keep "gadget" in English or use one fixed rendering); after translating, search the whole text with `pdftotext` for each term's variants and leftover English, and unify them before delivery.
 
+### 3.7 Links and bookmarks: restore and translate
+
+BabelDOC usually keeps named destinations and the outline structure, but it does **not** carry clickable link annotations into the translation, and bookmark titles stay in English. Handle this for every paper:
+
+- Use PyMuPDF to count links (`get_links()`), named destinations (`resolve_names()`) and outline entries (`get_toc()`) in the English original and the translation to see what is missing.
+- In-text citations `[n]`: per page, pair each linked English `[n]` with the same `[n]` in the translation (use a min-cost assignment by position when a number appears more than once), then add a link over the Chinese glyph box pointing at the original destination (e.g. `cite.xxx`). Do not invent links the English lacks (e.g. the `[4]` inside `[3]–[5]`).
+- Cross-references: figure, table, section, algorithm, listing, equation and appendix references change wording in Chinese (e.g. 「第 II 节」, 「图 1」, 「表 IV」, 「算法 1」); search for the Chinese wording. Pair all English phrase instances (captions included) with Chinese ones first, then transfer only those that were linked in English, so a body link cannot snap onto a caption.
+- Footnote marks and URLs/DOIs in references and appendices: transfer them too; build boxes per actual Chinese line when a URL wrapped.
+- Links inside figure or algorithm regions pasted back from the English original can keep their original coordinates.
+- No duplicate overlapping links; keep link boxes hidden and do not change body text or colour.
+- Bookmarks: rename each title to the matching Chinese heading in the body (keep proper nouns and abbreviations; use 「参考文献」 for references). **Do not rebuild with `set_toc()`**: it drops named destinations and pages become -1. Walk the outline items and edit `/Title` in place with `xref_set_key` (UTF-16BE hex string), then verify each entry's level, page and destination are unchanged.
+- Skip this step when the English original has no links or bookmarks.
+
 ### 4. Spot checks before delivery
 
 Check the page count with `pdfinfo`, look for untranslated passages, leftover long English sentences, tool placeholders and duplicated phrases with `pdftotext -layout`, and render pages with `pdftoppm` for a visual comparison. At minimum check:
@@ -98,6 +111,8 @@ Check the page count with `pdfinfo`, look for untranslated passages, leftover lo
 - Were references mistranslated or squeezed together
 - Are all figures and algorithm boxes restored to the English original, without covering captions or body text
 - Is terminology consistent throughout
+- Does the link count match the English original, do all destinations resolve, and do sampled citations land on the right entry
+- Are bookmarks translated to Chinese with unchanged destinations
 - Obvious errors in the author block, footers, table headers, appendices
 
 Fix problems before delivering; if something cannot be fixed, say so plainly.
@@ -108,6 +123,7 @@ Fix problems before delivering; if something cannot be fixed, say so plainly.
 - Keep proper nouns, abbreviations, formulas, code and citation markers in the original language.
 - Keep reference entries (authors, titles, venues, years, links and other bibliographic data) in the original language; the section heading itself may become 「参考文献」.
 - Translate all readable text: abstract, body, figure and table captions, list headings, footnotes, appendices.
+- Keep the original clickable links (citations, cross-references, URLs); translate bookmark titles to Chinese.
 - Keep figures, drawings, diagrams and the text inside them as the original English figure; do not redraw or replace them. Algorithm boxes and code listings also stay in English; translate only captions, table titles and in-text references.
 
 ## Delivery

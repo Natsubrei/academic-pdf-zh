@@ -6,7 +6,7 @@ description: Translate an English-language academic PDF (or a link to one) into 
 
 Translate an English academic paper PDF into a Chinese PDF whose layout stays as close to the original as possible. Translate readable text only.
 
-This skill must never contain secrets, tokens, accounts, key-file paths, or any other credentials. Read keys only from a secure location already present on the machine, or from the user at the moment of use; pass them to tools via environment variables, never on the command line, in the chat, in logs, or in this skill.
+This skill must never contain secrets, tokens, accounts, key-file paths, or any other credentials. Read keys only from a secure location already present on the machine, or from the user at the moment of use; never put them on the command line, in the chat, in logs, in attachments, or in this skill. Pass them to the translation tool in a form that tool will actually read: if environment variables are ignored, write the key into a tightly permissioned private config file (e.g. `chmod 600`) and pass it with the tool's config flag (e.g. `-c`). Do not keep that file in a repository or any working directory that might be committed, and do not print or attach it.
 
 ## Defaults
 
@@ -33,30 +33,34 @@ Main tools: BabelDOC (layout-preserving translation), PyMuPDF (post-translation 
 
 Go through an OpenAI-compatible endpoint. Model and base URL come from whatever the user specifies or the machine already has configured; when something is missing, tell the user which kind of configuration is absent — do not guess or use credentials of unknown origin.
 
+Confirm how the installed BabelDOC accepts input and credentials; do not copy stale flags. 0.7.x requires `--files` for the PDF (a positional path is rejected) and does not read `OPENAI_API_KEY` from the environment. Write the key into the private config file described above and pass it with `-c`; do not use `--openai-api-key` (it appears in the process list). If a later version starts honoring the environment variable, prefer that, and still never put the key on the command line.
+
 Typical parameters for a Chinese-only version:
 
 ```bash
 babeldoc --openai \
+  --files "$INPUT_PDF" \
+  -c "$BABELDOC_CONFIG" \
   --lang-in en --lang-out zh \
   --openai-base-url "$OPENAI_BASE_URL" \
   --openai-model "$OPENAI_MODEL" \
+  --openai-thinking disabled \
   --watermark-output-mode no_watermark \
   --skip-scanned-detection \
   --primary-font-family serif \
   --no-dual \
   --qps 3 \
   --custom-system-prompt "Translate into accurate, fluent Simplified Chinese academic prose; keep terminology consistent throughout; keep proper nouns, abbreviations, formulas, code, citation markers and bibliographic reference information in the original language." \
-  --output "$OUTDIR" \
-  "$INPUT_PDF"
+  --output "$OUTDIR"
 ```
 
 **Self-test the endpoint before the real run:** send a small piece of text to the same endpoint and model with `curl` or a short script, and confirm a non-empty translation comes back. Common traps:
 
 - Some services require a `User-Agent` or an extra session header; without it they return 403/400 while the tool silently retries, which looks like a hang.
 - A reasoning model with thinking enabled may put the translation in `reasoning_content` and leave `content` empty; disable thinking (e.g. `--openai-thinking disabled` or the service's own switch).
-- Set timeouts for the whole job and for each request (e.g. 120 s per request). If the output directory stays empty and the log shows no progress, check the endpoint instead of waiting.
+- Set timeouts for the whole job and for each request (e.g. 120 s per request). If wall-clock time looks long but the process elapsed time and the log are still advancing, the machine may have been paused — do not kill a translation that is still running. Only if the output directory stays empty and the log shows no progress should you check the endpoint instead of waiting.
 
-Pass the key via an environment variable (e.g. `OPENAI_API_KEY`), not `--openai-api-key`. Drop `--no-dual` if the user wants a bilingual version. Keep the unedited draft the tool produced, so patching can restart from it if something goes wrong.
+Drop `--no-dual` if the user wants a bilingual version. Keep the unedited draft the tool produced, so patching can restart from it if something goes wrong.
 
 ### 3. Post-translation patching (PyMuPDF)
 
@@ -65,14 +69,16 @@ Fix typos, placeholders, layout breakage and mistranslations against the origina
 - Redact the wrong glyphs first, then write the correct Chinese back with `insert_text` / `insert_textbox`.
 - When a list got collapsed into one paragraph, or references were mistranslated or squeezed together, paste the layout back from the English original. Method: copy that English page into a temporary PDF, erase everything outside the rectangle to keep and call `apply_redactions()`, then place it in with `show_pdf_page`. Never embed a whole English page, or text extraction will leak English that is not displayed.
 - When inserting Chinese, confirm the font contains the glyph; some Chinese fonts lack certain math symbols (e.g. U+2217 ∗) — switch to a font that has them rather than leaving tofu boxes.
+- After translation, scan for CJK Compatibility Ideographs (U+F900–U+FAFF). These are often mistaken for traditional or variant forms. NFKC-normalize them to standard Simplified Chinese and rewrite with a Chinese font that includes those standard glyphs (e.g. Source Han Serif CN); do not change the text without also changing the font.
 - Subset fonts only once, after all edits are done (`subset_fonts()`, deflate / garbage collect on save). Do not insert new glyphs afterwards into the same already-subset font name.
 
 ### 3.5 Figures and algorithm boxes: restore the English original
 
-BabelDOC also translates text inside figures, algorithm boxes (Algorithm N) and code listings, and the result is often garbled. Default handling:
+BabelDOC sometimes translates text inside figures, algorithm boxes (Algorithm N) and code listings, and the result is often garbled; sometimes the artwork is already left in English. Do not paste every figure back from the English original by default — doing so often covers the Chinese caption.
 
-- Use `get_image_rects`, clustering of `get_drawings`, and the position of the `Fig. N` caption to find the bounding box of each figure, algorithm box and code listing on the English original page. The box must cover all text and lines inside the figure but not the caption or body lines.
-- On the translated page, cover the same region with a white rectangle first, then paste the English region back with the method above (`sanitize_clip` + `show_pdf_page`).
+- Inspect each figure, algorithm box and code listing first. If the internal text is still English and intact, leave it; do not overwrite it.
+- Restore only those whose internal text was translated, garbled or whose layout broke. Use `get_image_rects`, clustering of `get_drawings`, and the position of the `Fig. N` caption to find the bounding box on the English original page. The box must cover all text and lines inside the figure but not the caption or body lines.
+- On the translated page, cover the same region with a white rectangle first, then paste the English region back with the method above (`sanitize_clip` + `show_pdf_page`). Visually confirm the paste did not cover the caption or body text.
 - Captions, table titles and in-text references outside the box stay in Chinese; the title, Input/Output and every step inside an algorithm box stay in English.
 - In two-column papers cover only the column the item sits in; treat a figure spanning both columns as one piece.
 
@@ -83,8 +89,10 @@ After translation, always check and fix these places where BabelDOC regularly fa
 - References translated or squeezed together: paste back from the English original.
 - Function names, field names and identifiers in tables translated or garbled: paste back or restore the original.
 - Lost indentation or monospace font in code listings: paste back from the original.
-- Overlapping appendix or section headings; a damaged first-page author block, email addresses or footer.
+- Overlapping appendix or section headings; a damaged first-page author block, email addresses or footer. Keep names and email addresses in English; affiliation may be translated into Chinese.
 - Broken table, figure or section references (e.g. "如 IV 所示" should be "如表 IV 所示").
+- Stacked or mixed caption prefixes (e.g. 「Fig图 12」): normalize to 「图 12：…」 and 「表 1：…」.
+- Words or acronyms split mid-token in tables or body text (e.g. `Wind-ows`, `空-ce`, `FV / M`): restore the intact identifier.
 - Inconsistent terms: before translating, fix a glossary of key terms (e.g. keep "gadget" in English or use one fixed rendering); after translating, search the whole text with `pdftotext` for each term's variants and leftover English, and unify them before delivery.
 
 ### 3.7 Links and bookmarks: restore and translate
@@ -98,7 +106,7 @@ BabelDOC usually keeps named destinations and the outline structure, but it does
 - Links inside figure or algorithm regions pasted back from the English original can keep their original coordinates.
 - No duplicate overlapping links; keep link boxes hidden and do not change body text or colour.
 - Bookmarks: rename each title to the matching Chinese heading in the body (keep proper nouns and abbreviations; use 「参考文献」 for references). **Do not rebuild with `set_toc()`**: it drops named destinations and pages become -1. Walk the outline items and edit `/Title` in place with `xref_set_key` (UTF-16BE hex string), then verify each entry's level, page and destination are unchanged.
-- Skip this step when the English original has no links or bookmarks.
+- Skip this step when the English original has no links or bookmarks; do not invent them.
 
 ### 4. Spot checks before delivery
 
@@ -107,15 +115,17 @@ Check the page count with `pdfinfo`, look for untranslated passages, leftover lo
 - Does the page count match
 - Are figures, tables and formulas still there and intact
 - Any large overlaps, overflows, garbled glyphs or missing translations
+- Any leftover CJK Compatibility Ideographs
 - Are indentation and monospace fonts preserved in code or lists
 - Were references mistranslated or squeezed together
-- Are all figures and algorithm boxes restored to the English original, without covering captions or body text
+- Were garbled figures and algorithm boxes restored to the English original, without covering captions or body text; were already-English figures left untouched
+- Any stacked prefixes such as 「Fig图」, or words and acronyms split mid-token in tables or body text
 - Is terminology consistent throughout
 - Does the link count match the English original, do all destinations resolve, and do sampled citations land on the right entry
 - Are bookmarks translated to Chinese with unchanged destinations
 - Obvious errors in the author block, footers, table headers, appendices
 
-Fix problems before delivering; if something cannot be fixed, say so plainly.
+Do not force-fix minor issues that are already present in the English original (a URL that already overflowed, a caption that already lacked a period, a Type 3 font warning the original also triggers). Mention them at delivery if useful. Fix problems before delivering; if something cannot be fixed, say so plainly.
 
 ## Translation standards
 

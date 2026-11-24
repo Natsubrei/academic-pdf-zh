@@ -106,7 +106,8 @@ BabelDOC usually keeps named destinations and the outline structure, but it does
 - Links inside figure or algorithm regions pasted back from the English original can keep their original coordinates.
 - No duplicate overlapping links; keep link boxes hidden and do not change body text or colour.
 - Bookmarks: rename each title to the matching Chinese heading in the body (keep proper nouns and abbreviations; use 「参考文献」 for references). **Do not rebuild with `set_toc()`**: it drops named destinations and pages become -1. Walk the outline items and edit `/Title` in place with `xref_set_key` (UTF-16BE hex string), then verify each entry's level, page and destination are unchanged.
-- Skip this step when the English original has no links or bookmarks; do not invent them.
+- When the English original has no links, do not invent links.
+- When the English original has no bookmarks, still generate a Chinese outline from the body headings: find the abstract, section, subsection and references headings in the English original by font size, weight and numbering (e.g. 1, 2.1, 2.1.1), locate the matching Chinese headings in the translation, and write levels, Chinese titles and `/XYZ` destinations just above each heading with `set_toc()` (fine when the original has no named destinations). Do not rely on the reader auto-detecting headings; mixed fonts in the translation usually defeat it.
 
 ### 4. Spot checks before delivery
 
@@ -122,7 +123,7 @@ Check the page count with `pdfinfo`, look for untranslated passages, leftover lo
 - Any stacked prefixes such as 「Fig图」, or words and acronyms split mid-token in tables or body text
 - Is terminology consistent throughout
 - Does the link count match the English original, do all destinations resolve, and do sampled citations land on the right entry
-- Are bookmarks translated to Chinese with unchanged destinations
+- Are bookmarks translated to Chinese with unchanged destinations; when the original had none, does the generated Chinese outline cover every section and jump to the right heading
 - Obvious errors in the author block, footers, table headers, appendices
 
 Do not force-fix minor issues that are already present in the English original (a URL that already overflowed, a caption that already lacked a period, a Type 3 font warning the original also triggers). Mention them at delivery if useful. Fix problems before delivering; if something cannot be fixed, say so plainly.
@@ -133,7 +134,7 @@ Do not force-fix minor issues that are already present in the English original (
 - Keep proper nouns, abbreviations, formulas, code and citation markers in the original language.
 - Keep reference entries (authors, titles, venues, years, links and other bibliographic data) in the original language; the section heading itself may become 「参考文献」.
 - Translate all readable text: abstract, body, figure and table captions, list headings, footnotes, appendices.
-- Keep the original clickable links (citations, cross-references, URLs); translate bookmark titles to Chinese.
+- Keep the original clickable links (citations, cross-references, URLs); translate bookmark titles to Chinese; when the original has no bookmarks, generate a Chinese outline from the section headings.
 - Keep figures, drawings, diagrams and the text inside them as the original English figure; do not redraw or replace them. Algorithm boxes and code listings also stay in English; translate only captions, table titles and in-text references.
 
 ## Delivery
